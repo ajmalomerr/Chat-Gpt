@@ -1,19 +1,31 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, TextInput, TouchableOpacity, StyleSheet, Text, ImageBackground, FlatList, SafeAreaView, Image, Alert } from 'react-native';
+import { View, TextInput, TouchableOpacity, StyleSheet, Text, ImageBackground, FlatList, SafeAreaView, Image, Alert, Pressable } from 'react-native';
 import ChatBubble from '../Component/ChatBubble';
 import axios from 'axios';
-import { apiCall } from '../../Api';
+import Voice from '@react-native-voice/voice';
+import Icon from 'react-native-vector-icons/Feather';
 
 const ChatView = ({ navigation }: any) => {
     const [newMessage, setNewMessage] = useState('');
     const [loader, setLoader] = useState(false);
     const [chats, setChats] = useState<any>([]);
     const [chatBtn, setChatBtn] = useState<boolean>(false);
+    const [startRecord, setStartRecord] = useState<boolean>(false);
     // const [time, setTime] = useState<boolean>(false);
     const flatListRef = useRef<any>(null);
 
     useEffect(() => {
-        navigation.setOptions({ title: 'Chat Boat', headerShown: true, headerMode: "float", })
+        Voice.onSpeechStart = onSpeechStartHandler;
+        Voice.onSpeechEnd = onSpeechEndHandler;
+        Voice.onSpeechResults = onSpeechResultsHandler;
+
+        return () => {
+            Voice.destroy().then(Voice.removeAllListeners);
+        }
+    }, []);
+
+    useEffect(() => {
+        // navigation.setOptions({ title: 'Chat Boat', headerShown: true, headerMode: "float", })
         if (flatListRef.current) {
             setTimeout(() => {
                 flatListRef?.current?.scrollToEnd({ animated: true });
@@ -23,7 +35,53 @@ const ChatView = ({ navigation }: any) => {
             }, 25000)
         }
     }, [chats]);
-    
+
+    const onSpeechStartHandler = () => {
+        console.log("speech start handler")
+        // setStartRecord(true);
+    }
+
+    const onSpeechEndHandler = () => {
+        console.log("speech end handler")
+        setStartRecord(false);
+    }
+
+    const onSpeechResultsHandler = (e: any) => {
+        console.log("voice event : ", e)
+        setNewMessage(e?.value?.toString());
+    }
+
+    const startRecording = async () => {
+        setStartRecord(true);
+        console.log("started")
+
+        try {
+            await Voice.start('en-GB');
+        } catch (error) {
+            console.log('error', error)
+        }
+
+    }
+
+    const stoptRecording = async () => {
+        // setStartRecord(true);
+        console.log("stopped")
+        try {
+            await Voice.stop();
+        } catch (error) {
+            console.log('error', error)
+        }
+
+    }
+
+
+    const apiAuth = axios.create({
+        headers: {
+            Authorization: 'Bearer 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',
+            'Content-Type': 'application/json',
+        },
+    })
+
 
     const sendPostRequest = async () => {
         if (newMessage.trim() !== '') {
@@ -33,54 +91,54 @@ const ChatView = ({ navigation }: any) => {
                 const conversation = [...chats, { role: "user", content: newMessage }];
 
                 setLoader(true);
-                const res = await axios.post(
+                // const res = await apiAuth.post(
+                //     'https://api.openai.com/v1/chat/completions',
+                //     {
+                //         model: "gpt-3.5-turbo",
+                //         messages: [{
+                //             role: "user",
+                //             content: `Does this message want to generate an AI picture, image, art or anything similar? ${newMessage} . Simply answer with a yes or no.`,
+                //         }],
+
+                //     },
+
+                // );
+                // let isArt = res?.data?.choices[0]?.message?.content;
+                // console.log(isArt)
+                // let isArtYes = isArt.trim();
+                // if (isArtYes.toLowerCase().includes('yes')) {
+                //     console.log('dalle api call');
+                //     try {
+                //         const res = await apiAuth.post("https://api.openai.com/v1/images/generations", {
+                //             prompt: newMessage,
+                //             n: 1,
+                //             size: "512x512"
+                //         },
+
+                //         )
+
+                //         let url = res?.data?.data[0]?.url;
+                //         setChatBtn(true)
+                //         await setChats([...chats, { role: "user", content: newMessage }, { role: "assistant", content: url }])
+
+                //     } catch (err) {
+                //         console.log('error: ', err);
+                //     }
+                // } else {
+                const response = await apiAuth.post(
                     'https://api.openai.com/v1/chat/completions',
                     {
                         model: "gpt-3.5-turbo",
-                        messages: [{
+                        messages: conversation.map((message) => ({
                             role: "user",
-                            content: `Does this message want to generate an AI picture, image, art or anything similar? ${newMessage} . Simply answer with a yes or no.`,
-                        }],
-
+                            content: message?.content,
+                        })),
                     },
-               
+
                 );
-                let isArt = res?.data?.choices[0]?.message?.content;
-                console.log(isArt)
-                let isArtYes = isArt.trim();
-                if (isArtYes.toLowerCase().includes('yes')) {
-                    console.log('dalle api call');
-                    try {
-                        const res = await axios.post("https://api.openai.com/v1/images/generations", {
-                            prompt: newMessage,
-                            n: 1,
-                            size: "512x512"
-                        },
-                        
-                        )
-
-                        let url = res?.data?.data[0]?.url;
-                        setChatBtn(true)
-                        await setChats([...chats, { role: "user", content: newMessage }, { role: "assistant", content: url }])
-
-                    } catch (err) {
-                        console.log('error: ', err);
-                    }
-                } else {
-                    const response = await axios.post(
-                        'https://api.openai.com/v1/chat/completions',
-                        {
-                            model: "gpt-3.5-turbo",
-                            messages: conversation.map((message) => ({
-                                role: "user",
-                                content: message?.content,
-                            })),
-                        },
-                      
-                    );
-                    setChatBtn(true)
-                    await setChats([...chats, { role: "user", content: newMessage }, response.data?.choices[0]?.message])
-                }
+                setChatBtn(true)
+                await setChats([...chats, { role: "user", content: newMessage }, response.data?.choices[0]?.message])
+                // }
                 // await setChats([...chats, { role: "user", content: newMessage }, res?.data?.choices[0]?.message])
                 setLoader(false)
             } catch (error) {
@@ -125,9 +183,25 @@ const ChatView = ({ navigation }: any) => {
                     multiline
                 />
                 {!chatBtn ? <>
-                    <TouchableOpacity style={styles.sendButton} onPress={sendPostRequest}>
+                    {/* <TouchableOpacity style={styles.sendButton} onPress={sendPostRequest}>
                         <Text style={styles.sendButtonText}>Send</Text>
-                    </TouchableOpacity>
+                    </TouchableOpacity> */}
+                    <View>
+                        {newMessage?.length == 0 ?
+                            <Pressable
+                                onPressIn={startRecording}
+                                onPressOut={stoptRecording}
+                            >
+                                <Image source={require('../../../assets/recordingIcon.png')}
+                                    style={styles.imageStyle}
+                                />
+                            </Pressable>
+                            :
+                            <TouchableOpacity style={styles.sendButton} onPress={sendPostRequest}>
+                                {/* <Text style={styles.sendButtonText}>Send</Text> */}
+                                <Icon name="send" size={22} color="#298a79" />
+                            </TouchableOpacity>}
+                    </View>
                 </> :
                     <Image source={require('../../../assets/loading.gif')}
                         style={styles.imageStyle}
@@ -164,11 +238,13 @@ const styles = StyleSheet.create({
         paddingTop: 10
     },
     sendButton: {
-        backgroundColor: '#007AFF',
-        borderRadius: 20,
-        paddingVertical: 8,
-        paddingHorizontal: 15,
-        height: 40
+        // backgroundColor: '#298a79',
+        backgroundColor: 'rgba(255, 255, 255, 0.8)',
+        borderRadius: 50,
+        height: 40,
+        width: 40,
+        justifyContent:"center",
+        alignItems:"center"
     },
     sendButtonText: {
         color: '#fff',

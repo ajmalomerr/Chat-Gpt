@@ -77,7 +77,7 @@ const ChatView = ({ navigation }: any) => {
 
     const apiAuth = axios.create({
         headers: {
-            Authorization: 'Bearer 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',
+            Authorization: 'Bearer "add your key',
             'Content-Type': 'application/json',
         },
     })
